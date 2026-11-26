@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IAB</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; margin: 0 auto; padding: 24px 16px; max-width: 420px; }
+    input, button { font: inherit; padding: 12px; width: 100%; box-sizing: border-box; margin-top: 8px; }
+    [hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <h1>IAB</h1>
+  <p id="status" role="status">Connecting…</p>
+  <form id="pair" hidden>
+    <label for="code">Pairing code from the Telegram bot</label>
+    <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required>
+    <button>Pair</button>
+  </form>
+  <section id="handoff" hidden>
+    <p>Telegram won't let the bot send here. Send it yourself:</p>
+    <p><strong id="text"></strong></p>
+    <a id="open">Open in Telegram</a>
+    <button id="copy" type="button">Copy message</button>
+  </section>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
