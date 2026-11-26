@@ -20,17 +20,17 @@ const SYSTEM = `You read a private Telegram chat between me and one friend and t
 Return the current state of the latest meetup, or plan = null if no meetup with a specific time is being arranged.
 - "agreed": both of us have accepted a specific time (e.g. "leg day at 5?" then "bet", "say less", "👍", "sounds good").
 - "proposed": one side suggested a specific time and the other has not accepted yet.
-- "cancelled": the latest meetup was called off.
+- "cancelled": the latest meetup was called off or postponed without a new time ("let us shift it", "can't make it again"). Return it with this status; never return plan = null for a meetup that was arranged and then called off.
 Read slang and Nigerian, British and American English naturally. Ignore times that are not meetups ("price hit 3", "I woke at 3").
 "at 5" means 17:00 unless context says morning. If I said I am running late, keep the agreed time. Never invent a time that was not said or clearly implied.
 Options: only a pending question from them to me with distinct choices, e.g. "outside lobby or indoor arena?" -> ["Outside lobby", "Indoor arena"].`
 
-export function createReader({ apiKey = process.env.ANTHROPIC_API_KEY, model = process.env.IAB_MODEL || 'claude-opus-5-5' } = {}) {
+export function createReader({ apiKey = process.env.ANTHROPIC_API_KEY, model = process.env.IAB_MODEL || 'claude-haiku-5-5' } = {}) {
   if (!apiKey) return null
   const client = new Anthropic({ apiKey, maxRetries: 2, timeout: 30_000 })
 
   /** lines: [{ mine, text, at }] oldest first. Returns ReadSchema output, or null if Claude gave no usable answer. */
-  return async function read(lines, { tz, now = Date.now() }) {
+  async function read(lines, { tz, now = Date.now() }) {
     const clock = (t) => new Intl.DateTimeFormat('en-GB', {
       timeZone: tz, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -46,7 +46,9 @@ export function createReader({ apiKey = process.env.ANTHROPIC_API_KEY, model = p
         content: `Now: ${clock(now)} (${tz}).\n\n<chat>\n${transcript}\n</chat>`,
       }],
     })
+    read.lastUsage = response.usage
     if (response.stop_reason !== 'end_turn') return null
     return response.parsed_output ?? null
   }
+  return read
 }

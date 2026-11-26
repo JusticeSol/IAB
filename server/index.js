@@ -11,7 +11,7 @@ if (!TELEGRAM_BOT_TOKEN) {
 
 const tg = telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_API || undefined)
 const read = createReader()
-console.log(read ? `Plans read by Claude (${process.env.IAB_MODEL || "claude-opus-5-5"})` : "No ANTHROPIC_API_KEY: plans found by keyword rules")
+console.log(read ? `Plans read by Claude (${process.env.IAB_MODEL || "claude-haiku-5-5"})` : "No ANTHROPIC_API_KEY: plans found by keyword rules")
 const iab = createIab({ db: DB_PATH, tg, tz: DEFAULT_TZ, read, log: (m) => console.log(new Date().toISOString(), m) })
 
 // Global pairing throttle: 8-digit codes, at most 20 guesses a minute.
