@@ -157,6 +157,44 @@ test('when Claude fails, keyword rules still find the plan', async () => {
   assert.equal(o.next(me()).place, 'Cafe Nero')
 })
 
+test('calendar: a clash shows on the card and one tap adds the plan once', async () => {
+  const sent = []
+  const added = []
+  const tg = async (_, b) => { sent.push(b) }
+  let busy = { summary: 'Standup', start: dubai('2026-11-25T17:30:00') }
+  const cal = {
+    connected: () => true,
+    linkFor: () => 'https://iab.example/google/start?s=x',
+    clash: async (_o, from, to, skip) => (busy && busy.start < to && busy.start >= from && skip !== 'ev1' ? busy : null),
+    add: async (_o, ev) => { added.push(ev); return 'ev1' },
+  }
+  const read = async () => legDay('agreed')
+  const o = createIab({ tg, now: () => T0, read, cal })
+  await o.onUpdate({ business_connection: { id: 'c', user: { id: 1 }, user_chat_id: 1, is_enabled: true, rights: { can_reply: true } } })
+  assert.match(sent[0].text, /\/calendar/)
+  const token = o.pair(sent[0].text.match(/\d{8}/)[0], 'Asia/Dubai')
+  const me = () => o.ownerFor(token)
+  await o.onUpdate({ message: { chat: { id: 1, type: 'private' }, from: { id: 1 }, text: '/calendar' } })
+  assert.match(sent.at(-1).text, /google\/start/)
+
+  await o.onUpdate({ business_message: {
+    business_connection_id: 'c', date: T0 / 1000, from: { id: 2 },
+    chat: { id: 2, type: 'private', first_name: 'Tunde' }, text: 'leg day 5pm?' } })
+  const p = o.next(me())
+  assert.deepEqual(p.clash, busy)
+  assert.deepEqual(p.actions.map((a) => a.id), ['onway', 'late', 'here', 'cal'])
+  const [a, b] = await Promise.all([o.act(me(), p.id, 'cal', 'k'), o.act(me(), p.id, 'cal', 'k')])
+  assert.equal(a.status, 'added')
+  assert.equal(b.status === 'added' || b.status === 'unknown', true)
+  assert.equal(added.length, 1)
+  assert.equal(added[0].summary, 'Leg day with Tunde')
+  assert.equal(o.next(me()).actions.some((x) => x.id === 'cal'), false, 'no second add')
+
+  busy = null
+  await o.act(me(), p.id, 'late', 'l')
+  assert.equal(o.next(me()).clash, null, 'moving the plan re-checks the calendar')
+})
+
 test('pairing codes are single use and unknown tokens are rejected', async () => {
   const { o, sent } = await setup()
   assert.equal(o.pair(sent[0].text.match(/\d{8}/)[0], 'UTC'), null)

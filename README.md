@@ -2,7 +2,7 @@
 
 Agree to meet someone in Telegram, then answer with one tap on Even G2: "On my way", "10 min late", "I'm here", or the choice your friend asked for ("Outside lobby" / "Indoor arena").
 
-Track: Messaging & News. Also entered for Best Telegram integration. Nothing in this repo existed before Nov 23, 2026; it uses the Even Hub SDK, the Anthropic SDK (Claude reads plans from the chat), chrono-node and Vite.
+Tracks: Messaging & News (main) and AI Assistants & Work (Telegram + Google Calendar in one flow). Also entered for Best Telegram integration. Nothing in this repo existed before Nov 23, 2026; it uses the Even Hub SDK, the Anthropic SDK (Claude reads plans from the chat), chrono-node and Vite.
 
 ## Run
 
@@ -13,6 +13,10 @@ Track: Messaging & News. Also entered for Best Telegram integration. Nothing in 
 5. Enter the code the bot sends you on the IAB phone page.
 
 On Windows, the simulator crashes when the project path is very long. Use a short folder.
+
+## Google Calendar (optional)
+
+Send /calendar to the bot and sign in with Google in a normal browser (Google sign-in does not work inside the glasses WebView). Agreed plans then show a clash line such as "! Clash: Standup 17:30" and an "Add to calendar" reply. Scope: calendar.events on the primary calendar. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and PUBLIC_URL in .env; the OAuth redirect URI is PUBLIC_URL/google/callback.
 
 ## Without a bot token
 

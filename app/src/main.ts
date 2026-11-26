@@ -8,6 +8,7 @@ type Action = { id: string; label: string }
 type Plan = {
   id: number; name: string; at: number; place: string | null
   activity: string | null; state: 'proposed' | 'agreed'; actions: Action[]
+  clash: { summary: string; start: number } | null
 }
 type Result = { status: string; text?: string; username?: string | null }
 
@@ -77,11 +78,12 @@ async function draw(text: string, withActions: boolean) {
 function card(p: Plan) {
   const mins = Math.round((p.at - Date.now()) / 60_000)
   const eta = mins >= 60 ? `in ${Math.floor(mins / 60)}h ${mins % 60}m` : mins > 0 ? `in ${mins} min` : mins === 0 ? 'now' : `${-mins} min ago`
-  const time = new Date(p.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+  const hhmm = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
   const what = p.activity ? ` · ${p.activity}` : ''
   // A proposal is a question waiting on me; an agreed plan is a fact.
   const head = p.state === 'proposed' ? `${p.name.toUpperCase()} asks${what || ' to meet'}?` : `${p.name.toUpperCase()}${what}`
-  return `${head}\n${time}  ${eta}${p.place ? `\n${p.place}` : ''}`
+  const clash = p.clash ? `\n! Clash: ${p.clash.summary.slice(0, 18)} ${hhmm(p.clash.start)}` : ''
+  return `${head}\n${hhmm(p.at)}  ${eta}${p.place ? `\n${p.place}` : ''}${clash}`
 }
 
 async function unpair() {
@@ -117,10 +119,12 @@ async function act(index: number) {
   if (pending?.key !== key) pending = { key, op: `${Date.now()}-${Math.random().toString(36).slice(2)}` }
   $('handoff').hidden = true
   try {
-    await draw(`Sending to ${target.name}…`, false)
+    await draw(action.id === 'cal' ? 'Adding to calendar…' : `Sending to ${target.name}…`, false)
     const r = await api<Result>(`/plans/${target.id}/act`, { action: action.id, op: pending.op })
     pending = null
     if (r.status === 'sent') await draw(`Sent to ${target.name}\n"${r.text}"`, false)
+    else if (r.status === 'added') await draw('Added to Google Calendar', false)
+    else if (r.status === 'failed') await draw('Calendar did not respond.\nNothing added.', false)
     else if (r.status === 'handoff') {
       $('text').textContent = r.text ?? ''
       const link = $<HTMLAnchorElement>('open')

@@ -8,6 +8,7 @@ const GRACE = 2 * 3600_000
 const CODE_TTL = 10 * 60_000
 const KEEP_LINES = 12
 const KEEP_FOR = 12 * 3600_000
+const MEET_LENGTH = 3600_000
 const hash = (s) => createHash('sha256').update(s).digest('hex')
 
 export const ACTIONS = {
@@ -16,21 +17,22 @@ export const ACTIONS = {
   here: { label: "I'm here", text: "I'm here!" },
   in: { label: "I'm in", text: "I'm in 👍" },
   cant: { label: "Can't make it", text: "Can't make it, sorry!" },
+  cal: { label: 'Add to calendar', text: 'Added to Google Calendar' },
 }
 
 /** The replies a card offers, in order. Options the friend asked for come first. */
-export function actionsFor(p) {
+export function actionsFor(p, calendarOn = false) {
   const opts = (p.options ? JSON.parse(p.options) : []).map((o, i) => ({ id: `opt${i}`, label: o, text: o }))
   const base = p.state === 'proposed'
     ? [...(opts.length ? [] : ['in']), 'cant']
-    : ['onway', 'late', ...(opts.length ? [] : ['here'])]
+    : ['onway', 'late', ...(opts.length ? [] : ['here']), ...(calendarOn && !p.cal_event && !opts.length ? ['cal'] : [])]
   return [...opts, ...base.map((id) => ({ id, ...ACTIONS[id] }))]
 }
 
 /**
  * read (optional): async (lines, { tz, now }) => ReadSchema result or null. Without it, keyword rules find plans.
  */
-export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.now, read = null, log = () => {} }) {
+export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.now, read = null, cal = null, log = () => {} }) {
   const db = new DatabaseSync(path)
   // Only extracted plans are stored, never message text.
   db.exec(`
@@ -42,7 +44,7 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
       status TEXT DEFAULT 'open', UNIQUE (owner, chat));
     CREATE TABLE IF NOT EXISTS sends (owner INTEGER, op TEXT, result TEXT, PRIMARY KEY (owner, op));
   `)
-  for (const col of ["state TEXT DEFAULT 'agreed'", 'activity TEXT', 'options TEXT', 'late_by INTEGER DEFAULT 0']) {
+  for (const col of ["state TEXT DEFAULT 'agreed'", 'activity TEXT', 'options TEXT', 'late_by INTEGER DEFAULT 0', 'cal_event TEXT', 'clash TEXT']) {
     try { db.exec(`ALTER TABLE plans ADD COLUMN ${col}`) } catch { /* already there */ }
   }
   const q = (sql) => db.prepare(sql)
@@ -61,7 +63,7 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     const code = String(randomInt(0, 1e8)).padStart(8, '0')
     q('DELETE FROM codes WHERE owner = ?').run(owner)
     q('INSERT INTO codes VALUES (?, ?, ?)').run(code, owner, now() + CODE_TTL)
-    await tg('sendMessage', { chat_id: dm, text: `Your IAB pairing code: ${code}\nIt expires in 10 minutes.` })
+    await tg('sendMessage', { chat_id: dm, text: `Your IAB pairing code: ${code}\nIt expires in 10 minutes.${cal ? '\nSend /calendar to connect Google Calendar.' : ''}` })
   }
 
   async function onConnection(c) {
@@ -91,19 +93,32 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     const lines = remember(owner.id, m.chat.id, { mine: !!mine, text, at: sent })
     if (!text) return
 
+    let done = false
     if (read) {
       try {
         const r = await read(lines, { tz: owner.tz, now: now() })
         if (r) {
           applyRead(owner, m.chat.id, r)
-          return
-        }
-        log('reader gave no answer; using rules')
+          done = true
+        } else log('reader gave no answer; using rules')
       } catch (e) {
         log(`reader failed (${e?.constructor?.name ?? 'Error'}); using rules`)
       }
     }
-    applyRules(owner, m.chat.id, text, sent, mine)
+    if (!done) applyRules(owner, m.chat.id, text, sent, mine)
+    await recheck(owner.id, m.chat.id)
+  }
+
+  /** Looks for a calendar clash with the chat's open plan. Calendar trouble never blocks the card. */
+  async function recheck(ownerId, chatId) {
+    const p = q("SELECT * FROM plans WHERE owner = ? AND chat = ? AND status = 'open'").get(ownerId, chatId)
+    if (!p || !cal?.connected(ownerId)) return
+    try {
+      const hit = await cal.clash(ownerId, p.at, p.at + MEET_LENGTH, p.cal_event)
+      q('UPDATE plans SET clash = ? WHERE id = ?').run(hit ? JSON.stringify(hit) : null, p.id)
+    } catch (e) {
+      log(`calendar check failed: ${e.message}`)
+    }
   }
 
   function applyRules(owner, chatId, text, sent, mine) {
@@ -170,6 +185,13 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
       await onBusinessMessage(u.business_message)
     }
     const m = u.message
+    if (m?.chat.type === 'private' && m.text?.startsWith('/calendar')) {
+      const owner = q('SELECT * FROM owners WHERE id = ?').get(m.from.id)
+      const text = !owner?.conn ? 'Connect me to your account first, in Telegram settings.'
+        : !cal ? 'Google Calendar is not set up on this server.'
+        : `Connect Google Calendar (the link works once, for 15 minutes):\n${cal.linkFor(owner.id)}`
+      await tg('sendMessage', { chat_id: m.chat.id, text })
+    }
     if (m?.chat.type === 'private' && m.text?.startsWith('/start')) {
       const owner = q('SELECT * FROM owners WHERE id = ?').get(m.from.id)
       if (owner?.conn) await sendCode(owner.id, m.chat.id)
@@ -196,7 +218,7 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
 
   const ownerFor = (token) => token ? q('SELECT * FROM owners WHERE token = ?').get(hash(token)) : undefined
 
-  const PLAN = `SELECT p.id, p.at, p.place, p.chat, p.state, p.activity, p.options, c.name, c.username, c.last_in
+  const PLAN = `SELECT p.id, p.at, p.place, p.chat, p.state, p.activity, p.options, p.cal_event, p.clash, c.name, c.username, c.last_in
     FROM plans p JOIN chats c ON c.owner = p.owner AND c.chat = p.chat`
 
   function next(owner) {
@@ -205,7 +227,8 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     if (!p) return null
     return {
       id: p.id, name: p.name, at: p.at, place: p.place, activity: p.activity, state: p.state,
-      actions: actionsFor(p).map(({ id, label }) => ({ id, label })),
+      clash: p.clash ? JSON.parse(p.clash) : null,
+      actions: actionsFor(p, !!cal?.connected(owner.id)).map(({ id, label }) => ({ id, label })),
     }
   }
 
@@ -216,13 +239,26 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     if (prior) return JSON.parse(prior.result)
     const p = q(`${PLAN} WHERE p.owner = ? AND p.id = ? AND p.status = 'open'`).get(owner.id, id)
     if (!p) return { status: 'not_found' }
-    const action = actionsFor(p).find((a) => a.id === actionId)
+    const action = actionsFor(p, !!cal?.connected(owner.id)).find((a) => a.id === actionId)
     if (!action) return { status: 'not_found' }
     const { text } = action
     q('INSERT INTO sends VALUES (?, ?, ?)').run(owner.id, op, JSON.stringify({ status: 'unknown' }))
     const finish = (r) => {
       q('UPDATE sends SET result = ? WHERE owner = ? AND op = ?').run(JSON.stringify(r), owner.id, op)
       return r
+    }
+
+    if (actionId === 'cal') {
+      try {
+        const eventId = await cal.add(owner.id, {
+          summary: `${p.activity ?? 'Meet'} with ${p.name}`, location: p.place, from: p.at, to: p.at + MEET_LENGTH,
+        })
+        q('UPDATE plans SET cal_event = ? WHERE id = ?').run(eventId, id)
+        return finish({ status: 'added', text })
+      } catch (e) {
+        log(`calendar add failed: ${e.message}`)
+        return finish({ status: 'failed' })
+      }
     }
 
     const handoff = { status: 'handoff', text, username: p.username }
@@ -236,7 +272,10 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     if (actionId.startsWith('opt') || actionId === 'in') {
       q("UPDATE plans SET state = 'agreed', options = NULL WHERE id = ?").run(id)
     }
-    if (actionId === 'late') q('UPDATE plans SET at = at + 600000, late_by = late_by + 600000 WHERE id = ?').run(id)
+    if (actionId === 'late') {
+      q('UPDATE plans SET at = at + 600000, late_by = late_by + 600000 WHERE id = ?').run(id)
+      await recheck(owner.id, p.chat)
+    }
     if (actionId === 'here' || actionId === 'cant') q("UPDATE plans SET status = 'done' WHERE id = ?").run(id)
     return finish({ status: 'sent', text })
   }
