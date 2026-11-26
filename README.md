@@ -1,15 +1,15 @@
 # IAB (In a bit)
 
-Agree to meet someone in Telegram, then tell them "On my way", "10 min late" or "I'm here" with one tap on Even G2.
+Agree to meet someone in Telegram, then answer with one tap on Even G2: "On my way", "10 min late", "I'm here", or the choice your friend asked for ("Outside lobby" / "Indoor arena").
 
-Track: Messaging & News. Also entered for Best Telegram integration. Nothing in this repo existed before Nov 23, 2026; it uses the Even Hub SDK, chrono-node and Vite.
+Track: Messaging & News. Also entered for Best Telegram integration. Nothing in this repo existed before Nov 23, 2026; it uses the Even Hub SDK, the Anthropic SDK (Claude reads plans from the chat), chrono-node and Vite.
 
 ## Run
 
-1. Create a bot with @BotFather and enable its business/automation mode there.
-2. Copy `.env.example` to `.env` and paste the token.
+1. Create a bot with @BotFather and turn on Secretary Mode (Bot Settings → Secretary Mode).
+2. Copy `.env.example` to `.env`, paste the bot token and an Anthropic API key.
 3. `npm install`, then in three terminals: `npm run server`, `npm run dev`, `npm run sim`.
-4. Connect the bot to your Telegram account in Telegram settings. Choose which chats it may see and allow replies.
+4. Connect the bot to your Telegram account in Telegram settings (Chat Automation). Choose which chats it may see and allow replies.
 5. Enter the code the bot sends you on the IAB phone page.
 
 On Windows, the simulator crashes when the project path is very long. Use a short folder.
@@ -20,10 +20,15 @@ On Windows, the simulator crashes when the project path is very long. Use a shor
 
 ## Safety
 
-- Only private chats the user selects in Telegram reach the server. Message text is not stored; names, times and places of meetups are.
+- Only private chats the user selects in Telegram reach the server. Message text is never written to disk; names, times and places of meetups are.
+- To read plans, the last few messages of a chat (up to 12, from the last 12 hours) are kept in memory and sent to the Claude API. Without an API key nothing leaves the server.
 - A message goes out only after a tap. Retried taps are sent once.
 - Telegram lets a connected bot reply only in chats with an incoming message in the last 24 hours. Otherwise IAB hands the text to the phone.
 
+## How plans are read
+
+Claude reads the recent chat and returns the meetup state (proposed / agreed / cancelled, who proposed it, time, place, activity) and any choice the friend asked for. Those choices become one-tap replies. If Claude is unavailable, English keyword rules take over. `node --env-file=.env dev/try-reader.js` runs the reader on sample chats.
+
 ## Limits today
 
-Meetups are found with English time and keyword rules, one open plan per chat.
+One open plan per chat. Private chats only: group chats need the bot added to the group.

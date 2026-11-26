@@ -39,3 +39,14 @@ export function findPlan(text, sentAt, tz) {
 }
 
 export const isYes = (text) => YES.test(text) && !NO.test(text)
+
+/** "2026-11-26T17:00" in tz -> epoch ms, or null if malformed. */
+export function localToEpoch(local, tz) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(local ?? '')
+  if (!m) return null
+  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5])
+  // Correct twice so a DST edge between the guess and the answer still lands right.
+  let at = wall - tzOffsetMinutes(tz, new Date(wall)) * 60_000
+  at = wall - tzOffsetMinutes(tz, new Date(at)) * 60_000
+  return Number.isFinite(at) ? at : null
+}

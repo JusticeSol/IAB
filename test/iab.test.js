@@ -82,6 +82,81 @@ test('a message on an unknown connection looks the connection up and pairs', asy
   assert.ok(o.ownerFor(token))
 })
 
+async function setupReader(answers) {
+  const sent = []
+  const tg = async (_, b) => { sent.push(b) }
+  let next = 0
+  const read = async () => {
+    const a = answers[next++]
+    if (a instanceof Error) throw a
+    return a
+  }
+  const o = createIab({ tg, now: () => T0, read })
+  await o.onUpdate({ business_connection: { id: 'c', user: { id: 1 }, user_chat_id: 1, is_enabled: true, rights: { can_reply: true } } })
+  const token = o.pair(sent[0].text.match(/\d{8}/)[0], 'Asia/Dubai')
+  const msg = (from, text) => o.onUpdate({ business_message: {
+    business_connection_id: 'c', date: T0 / 1000, from: { id: from },
+    chat: { id: 2, type: 'private', first_name: 'Tunde', username: 'tunde' }, text } })
+  return { o, sent, msg, me: () => o.ownerFor(token) }
+}
+
+const legDay = (status, extra = {}) => ({
+  plan: { status, proposed_by: 'them', local_time: '2026-11-25T17:00', place: null, activity: 'Leg day', ...extra },
+  options: [],
+})
+
+test('their proposal with a question becomes a card with those answers', async () => {
+  const { o, sent, msg, me } = await setupReader([
+    { ...legDay('proposed'), options: ['Outside lobby', 'Indoor arena'] },
+  ])
+  await msg(2, 'leg day by 5. outside lobby or indoor arena?')
+  const p = o.next(me())
+  assert.equal(p.state, 'proposed')
+  assert.equal(p.activity, 'Leg day')
+  assert.equal(p.at, dubai('2026-11-25T17:00:00'))
+  assert.deepEqual(p.actions.map((a) => a.label), ['Outside lobby', 'Indoor arena', "Can't make it"])
+  assert.equal((await o.act(me(), p.id, 'opt1', 'a')).status, 'sent')
+  assert.equal(sent.at(-1).text, 'Indoor arena')
+  const after = o.next(me())
+  assert.equal(after.state, 'agreed', 'answering the question accepts the plan')
+  assert.equal(after.id, p.id)
+  assert.deepEqual(after.actions.map((a) => a.id), ['onway', 'late', 'here'])
+})
+
+test('my own proposal shows nothing until they accept; cancel clears it', async () => {
+  const { o, msg, me } = await setupReader([
+    legDay('proposed', { proposed_by: 'me' }),
+    legDay('agreed', { proposed_by: 'me' }),
+    legDay('cancelled'),
+  ])
+  await msg(1, 'leg day at 5?')
+  assert.equal(o.next(me()), null)
+  await msg(2, 'bet')
+  assert.equal(o.next(me()).state, 'agreed')
+  await msg(2, 'actually cancel, I am sick')
+  assert.equal(o.next(me()), null)
+})
+
+test('a re-read keeps my "10 min late"; a real time change replaces it', async () => {
+  const { o, msg, me } = await setupReader([
+    legDay('agreed'), legDay('agreed'), legDay('agreed', { local_time: '2026-11-25T16:30' }),
+  ])
+  await msg(2, 'leg day 5pm?')
+  const p = o.next(me())
+  await o.act(me(), p.id, 'late', 'l')
+  await msg(2, 'cool')
+  assert.equal(o.next(me()).at, p.at + 600_000)
+  await msg(2, 'make it 4:30 instead')
+  assert.equal(o.next(me()).at, dubai('2026-11-25T16:30:00'))
+})
+
+test('when Claude fails, keyword rules still find the plan', async () => {
+  const { o, msg, me } = await setupReader([new Error('down'), null])
+  await msg(2, 'coffee at 3 at Cafe Nero?')
+  await msg(1, 'sounds good')
+  assert.equal(o.next(me()).place, 'Cafe Nero')
+})
+
 test('pairing codes are single use and unknown tokens are rejected', async () => {
   const { o, sent } = await setup()
   assert.equal(o.pair(sent[0].text.match(/\d{8}/)[0], 'UTC'), null)

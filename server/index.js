@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { createIab } from './iab.js'
 import { telegram } from './telegram.js'
+import { createReader } from './llm.js'
 
 const { TELEGRAM_BOT_TOKEN, TELEGRAM_API, DB_PATH = 'iab.db', PORT = '8787', DEFAULT_TZ = 'UTC' } = process.env
 if (!TELEGRAM_BOT_TOKEN) {
@@ -9,7 +10,9 @@ if (!TELEGRAM_BOT_TOKEN) {
 }
 
 const tg = telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_API || undefined)
-const iab = createIab({ db: DB_PATH, tg, tz: DEFAULT_TZ })
+const read = createReader()
+console.log(read ? `Plans read by Claude (${process.env.IAB_MODEL || "claude-opus-5-5"})` : "No ANTHROPIC_API_KEY: plans found by keyword rules")
+const iab = createIab({ db: DB_PATH, tg, tz: DEFAULT_TZ, read, log: (m) => console.log(new Date().toISOString(), m) })
 
 // Global pairing throttle: 8-digit codes, at most 20 guesses a minute.
 let guesses = 0

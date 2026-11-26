@@ -4,13 +4,11 @@ import {
 } from '@evenrealities/even_hub_sdk'
 
 const API: string = import.meta.env.VITE_API ?? 'http://127.0.0.1:8787'
-const ACTIONS = [
-  { id: 'onway', label: 'On my way' },
-  { id: 'late', label: '10 min late' },
-  { id: 'here', label: "I'm here" },
-] as const
-
-type Plan = { id: number; name: string; at: number; place: string | null }
+type Action = { id: string; label: string }
+type Plan = {
+  id: number; name: string; at: number; place: string | null
+  activity: string | null; state: 'proposed' | 'agreed'; actions: Action[]
+}
 type Result = { status: string; text?: string; username?: string | null }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
@@ -21,7 +19,7 @@ let plan: Plan | null = null
 let busy = false
 let shown = ''
 let layout: boolean | null = null
-let layoutPlan = 0
+let layoutKey = ''
 let started = false
 // Reused until the outcome is known, so a retry cannot send twice.
 let pending: { key: string; op: string } | null = null
@@ -41,20 +39,21 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
   return data
 }
 
-/** Draw one headline, plus the three replies when there is a plan to act on. */
+/** Draw one headline, plus the replies when there is a plan to act on. */
 async function draw(text: string, withActions: boolean) {
   const key = `${withActions}|${text}`
   if (key === shown) return
   shown = key
   $('status').textContent = text
-  // Update text in place for the same plan: a rebuild would move the selection back to row one mid-choice.
-  const samePlan = !withActions || layoutPlan === plan?.id
+  // Same plan and same replies: update text in place, since a rebuild moves the selection back to row one mid-choice.
+  const listKey = withActions && plan ? `${plan.id}|${plan.actions.map((a) => a.id).join()}` : ''
+  const samePlan = !withActions || layoutKey === listKey
   if (layout === withActions && samePlan) {
     await bridge.textContainerUpgrade(new TextContainerUpgrade({ containerID: 1, containerName: 'card', content: text }))
     return
   }
   layout = withActions
-  layoutPlan = withActions ? plan?.id ?? 0 : 0
+  layoutKey = listKey
   const page = {
     containerTotalNum: withActions ? 2 : 1,
     textObject: [new TextContainerProperty({
@@ -65,7 +64,7 @@ async function draw(text: string, withActions: boolean) {
     listObject: withActions ? [new ListContainerProperty({
       containerID: 2, containerName: 'actions', isEventCapture: 1,
       xPosition: 16, yPosition: 144, width: 544, height: 136,
-      itemContainer: new ListItemContainerProperty({ itemCount: ACTIONS.length, itemWidth: 0, isItemSelectBorderEn: 1, itemName: ACTIONS.map((a) => a.label) }),
+      itemContainer: new ListItemContainerProperty({ itemCount: plan?.actions.length ?? 0, itemWidth: 0, isItemSelectBorderEn: 1, itemName: plan?.actions.map((a) => a.label) ?? [] }),
     })] : [],
   }
   if (started) await bridge.rebuildPageContainer(new RebuildPageContainer(page))
@@ -79,7 +78,10 @@ function card(p: Plan) {
   const mins = Math.round((p.at - Date.now()) / 60_000)
   const eta = mins >= 60 ? `in ${Math.floor(mins / 60)}h ${mins % 60}m` : mins > 0 ? `in ${mins} min` : mins === 0 ? 'now' : `${-mins} min ago`
   const time = new Date(p.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-  return `${p.name.toUpperCase()}\n${time}  ${eta}${p.place ? `\n${p.place}` : ''}`
+  const what = p.activity ? ` · ${p.activity}` : ''
+  // A proposal is a question waiting on me; an agreed plan is a fact.
+  const head = p.state === 'proposed' ? `${p.name.toUpperCase()} asks${what || ' to meet'}?` : `${p.name.toUpperCase()}${what}`
+  return `${head}\n${time}  ${eta}${p.place ? `\n${p.place}` : ''}`
 }
 
 async function unpair() {
@@ -107,7 +109,7 @@ async function refresh() {
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 async function act(index: number) {
-  const action = ACTIONS[index]
+  const action = plan?.actions[index]
   if (!plan || !action || busy) return
   busy = true
   const target = plan
