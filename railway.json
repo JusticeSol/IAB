@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "echo server only, no app build"
+  },
+  "deploy": {
+    "startCommand": "node server/index.js",
+    "healthcheckPath": "/health",
+    "restartPolicyType": "ALWAYS",
+    "numReplicas": 1
+  }
+}
