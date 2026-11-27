@@ -152,6 +152,19 @@ test('a re-read keeps my "10 min late"; a real time change replaces it', async (
   assert.equal(o.next(me()).at, dubai('2026-11-25T16:30:00'))
 })
 
+test("after I'm here, chat about the same meetup does not bring it back; a new time does", async () => {
+  const { o, msg, me } = await setupReader([
+    legDay('agreed'), legDay('agreed'), legDay('agreed', { local_time: '2026-11-26T17:00' }),
+  ])
+  await msg(2, 'leg day 5pm?')
+  const p = o.next(me())
+  await o.act(me(), p.id, 'here', 'h')
+  await msg(2, 'cool, coming down now')
+  assert.equal(o.next(me()), null)
+  await msg(2, 'same time tomorrow?')
+  assert.equal(o.next(me()).at, dubai('2026-11-26T17:00:00'))
+})
+
 test('when Claude fails, keyword rules still find the plan', async () => {
   const { o, msg, me } = await setupReader([new Error('down'), null])
   await msg(2, 'coffee at 3 at Cafe Nero?')

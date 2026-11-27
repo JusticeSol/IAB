@@ -150,20 +150,23 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     if (!at || at < now() - GRACE) return outcome(`skipped: time is past (${owner.tz})`)
     // A plan I proposed waits for their answer; there is nothing for me to tap yet.
     if (plan.status === 'proposed' && plan.proposed_by === 'me' && open?.state !== 'agreed') return outcome('waiting for their answer')
-    outcome('card')
     const clip = (s, n) => (s ? String(s).trim().slice(0, n) || null : null)
     const opts = (options ?? []).map((o) => clip(o, 20)).filter(Boolean).slice(0, 2)
-    upsertPlan(owner.id, chatId, {
+    const shown = upsertPlan(owner.id, chatId, {
       at,
       place: clip(plan.place, 24) ?? open?.place ?? null,
       activity: clip(plan.activity, 20),
       state: plan.status === 'agreed' || open?.state === 'agreed' ? 'agreed' : 'proposed',
       options: opts.length ? JSON.stringify(opts) : null,
     })
+    outcome(shown ? 'card' : 'already arrived; ignored')
   }
 
   function upsertPlan(owner, chat, { at, place, activity = null, state = 'agreed', options = null }) {
     const open = q("SELECT * FROM plans WHERE owner = ? AND chat = ? AND status = 'open'").get(owner, chat)
+    // "See you there" after I'm here is talk about a meetup that already happened, not a new one.
+    const arrived = q("SELECT * FROM plans WHERE owner = ? AND chat = ? AND status = 'arrived'").get(owner, chat)
+    if (!open && arrived && Math.abs(arrived.at - arrived.late_by - at) <= 3600_000) return false
     if (open && Math.abs(open.at - at) <= 3600_000) {
       // Same meetup: keep the id so the card on the glasses stays valid.
       // Our own "10 min late" moved the stored time; a re-read of the chat still sees the original.
@@ -178,6 +181,7 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     }
     q('UPDATE chats SET draft_at = NULL, draft_place = NULL, draft_mine = NULL WHERE owner = ? AND chat = ?')
       .run(owner, chat)
+    return true
   }
 
   async function onUpdate(u) {
@@ -284,7 +288,8 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     }
     // Once on the way, the card stops offering it and waits for "10 min late" or "I'm here".
     if (actionId === 'onway') q('UPDATE plans SET going = 1 WHERE id = ?').run(id)
-    if (actionId === 'here' || actionId === 'cant') q("UPDATE plans SET status = 'done' WHERE id = ?").run(id)
+    if (actionId === 'here') q("UPDATE plans SET status = 'arrived' WHERE id = ?").run(id)
+    if (actionId === 'cant') q("UPDATE plans SET status = 'done' WHERE id = ?").run(id)
     return finish({ status: 'sent', text })
   }
 
