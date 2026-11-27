@@ -16,7 +16,7 @@ const say = (from, text, bot = false) => o.onUpdate({ business_message: {
   chat: { id: 2, type: 'private', first_name: 'Jerpi' }, text, ...(bot && { sender_business_bot: { id: 99 } }) } })
 const show = (step) => {
   const p = o.next(me())
-  console.log(`${step}\n   card: ${p ? `${p.state}${p.going ? ' (on the way)' : ''} ${new Date(p.at).toISOString().slice(11, 16)}Z ${p.activity ?? ''} | ${p.actions.map((a) => a.label).join(' / ')}` : 'none'}`)
+  console.log(`${step}\n   card: ${p ? `${p.state}${p.going ? ' (confirmed)' : ''} ${new Date(p.at).toISOString().slice(11, 16)}Z ${p.activity ?? ''} | ${p.actions.map((a) => a.label).join(' / ')}` : 'none'}`)
 }
 const tap = async (label) => {
   const p = o.next(me())
@@ -30,7 +30,7 @@ const tap = async (label) => {
 await say(2, 'leg day by 5pm. outside lobby or indoor arena?'); show('JERPI: leg day by 5pm. outside lobby or indoor arena?')
 await tap('Indoor arena')
 await say(2, 'okay'); show('JERPI: okay')
-await tap('On my way')
+await tap("I'll be there")
 await say(2, 'alright, see you there'); show('JERPI: alright, see you there')
 await tap("I'm here")
 await say(2, 'cool, coming down now'); show('JERPI: cool, coming down now')

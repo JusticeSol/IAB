@@ -14,7 +14,7 @@ const titleFor = (p) => `${p.activity ?? 'Meet'} with ${p.name}`
 const hash = (s) => createHash('sha256').update(s).digest('hex')
 
 export const ACTIONS = {
-  onway: { label: 'On my way', text: 'On my way!' },
+  onway: { label: "I'll be there", text: "I'll be there!" },
   late: { label: '10 min late', text: 'Running 10 minutes late, sorry!' },
   here: { label: "I'm here", text: "I'm here!" },
   in: { label: "I'm in", text: "I'm in 👍" },
@@ -289,7 +289,7 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
       q('UPDATE plans SET at = at + 600000, late_by = late_by + 600000 WHERE id = ?').run(id)
       await recheck(owner.id, p.chat)
     }
-    // Once on the way, the card stops offering it and waits for "10 min late" or "I'm here".
+    // Once confirmed, the card stops offering it and waits for "10 min late" or "I'm here".
     if (actionId === 'onway') q('UPDATE plans SET going = 1 WHERE id = ?').run(id)
     if (actionId === 'here') q("UPDATE plans SET status = 'arrived' WHERE id = ?").run(id)
     if (actionId === 'cant') q("UPDATE plans SET status = 'done' WHERE id = ?").run(id)

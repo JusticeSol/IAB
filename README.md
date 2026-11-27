@@ -1,6 +1,6 @@
 # IAB (In a bit)
 
-Meetups you agree in Telegram show up on your Even G2, and you answer with one tap: "On my way", "10 min late", "I'm here", or the choice your friend asked for ("Outside lobby" / "Indoor arena").
+Meetups you agree in Telegram show up on your Even G2, and you answer with one tap: "I'll be there", "10 min late", "I'm here", or the choice your friend asked for ("Outside lobby" / "Indoor arena").
 
 Built for the people you actually meet: the gym group that texts "leg day by 5, outside lobby or indoor arena?" while your phone is in the locker.
 
@@ -13,7 +13,7 @@ Nothing in this repo existed before Nov 23, 2026. It uses the Even Hub SDK, the 
 1. **A friend proposes.** "leg day by 5pm. outside lobby or indoor arena?" becomes a card on the glasses: `TUNDE asks · Leg day?` with `Outside lobby / Indoor arena / Can't make it`.
 2. **You tap an answer.** It is sent from your own Telegram account (not a bot), and the card becomes the agreed plan.
 3. **Your calendar is checked.** If something overlaps, the card says `! Clash: Standup 17:30`. One tap adds the meetup to Google Calendar.
-4. **On the day.** `On my way`, `10 min late` (moves the plan by 10 minutes) and `I'm here` (closes it).
+4. **On the day.** `I'll be there`, `10 min late` (moves the plan by 10 minutes) and `I'm here` (closes it).
 
 Your friends install nothing. IAB works in any private Telegram chat you choose to share with it.
 

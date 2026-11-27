@@ -22,7 +22,7 @@ const sample = (): Plan | null => {
   return PREVIEW === 'agreed'
     ? { id: 1, name: 'Jerpi', at, place: 'Cafe One, Lekki Phase 1', activity: 'Leg day', state: 'agreed',
         clash: { summary: 'Weekly team standup', start: at + 30 * 60_000 },
-        actions: [{ id: 'onway', label: 'On my way' }, { id: 'late', label: '10 min late' }, { id: 'here', label: "I'm here" }, { id: 'cal', label: 'Add to calendar' }] }
+        actions: [{ id: 'onway', label: "I'll be there" }, { id: 'late', label: '10 min late' }, { id: 'here', label: "I'm here" }, { id: 'cal', label: 'Add to calendar' }] }
     : { id: 2, name: 'Tunde', at, place: null, activity: 'Leg day', state: 'proposed', clash: null,
         actions: [{ id: 'opt0', label: 'Outside lobby' }, { id: 'opt1', label: 'Indoor arena' }, { id: 'cant', label: "Can't make it" }] }
 }
@@ -97,7 +97,7 @@ function card(p: Plan) {
   const hhmm = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
   const what = p.activity ? ` · ${p.activity}` : ''
   // A proposal is a question waiting on me; an agreed plan is a fact.
-  const head = p.state === 'proposed' ? `${p.name.toUpperCase()} asks${what || ' to meet'}?` : `${p.name.toUpperCase()}${what}${p.going ? ' · On the way' : ''}`
+  const head = p.state === 'proposed' ? `${p.name.toUpperCase()} asks${what || ' to meet'}?` : `${p.name.toUpperCase()}${what}${p.going ? ' · Confirmed' : ''}`
   // Three lines at most, so four replies fit below without scrolling.
   const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n).trimEnd() + '.' : t)
   const where = p.place ? `  ·  ${clip(p.place, 20)}` : ''
