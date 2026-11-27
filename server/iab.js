@@ -138,15 +138,19 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
 
   function applyRead(owner, chatId, { plan, options }) {
     const open = q("SELECT * FROM plans WHERE owner = ? AND chat = ? AND status = 'open'").get(owner.id, chatId)
-    if (!plan) return
+    // What was read, never the message text: status, proposer, time, number of options.
+    const seen = plan ? `${plan.status} by ${plan.proposed_by} for ${plan.local_time}, ${(options ?? []).length} options` : 'no plan'
+    const outcome = (what) => log(`read: ${seen} -> ${what}`)
+    if (!plan) return outcome('nothing to show')
     if (plan.status === 'cancelled') {
       if (open) q("UPDATE plans SET status = 'done' WHERE id = ?").run(open.id)
-      return
+      return outcome('cleared')
     }
     const at = localToEpoch(plan.local_time, owner.tz)
-    if (!at || at < now() - GRACE) return
+    if (!at || at < now() - GRACE) return outcome(`skipped: time is past (${owner.tz})`)
     // A plan I proposed waits for their answer; there is nothing for me to tap yet.
-    if (plan.status === 'proposed' && plan.proposed_by === 'me' && open?.state !== 'agreed') return
+    if (plan.status === 'proposed' && plan.proposed_by === 'me' && open?.state !== 'agreed') return outcome('waiting for their answer')
+    outcome('card')
     const clip = (s, n) => (s ? String(s).trim().slice(0, n) || null : null)
     const opts = (options ?? []).map((o) => clip(o, 20)).filter(Boolean).slice(0, 2)
     upsertPlan(owner.id, chatId, {
