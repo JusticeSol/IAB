@@ -27,7 +27,7 @@ export function actionsFor(p, calendarOn = false) {
   const opts = (p.options ? JSON.parse(p.options) : []).map((o, i) => ({ id: `opt${i}`, label: o, text: o }))
   const base = p.state === 'proposed'
     ? [...(opts.length ? [] : ['in']), 'cant']
-    : ['onway', 'late', ...(opts.length ? [] : ['here']), ...(calendarOn && !p.cal_event && !opts.length ? ['cal'] : [])]
+    : [...(p.going ? [] : ['onway']), 'late', ...(opts.length ? [] : ['here']), ...(calendarOn && !p.cal_event && !opts.length ? ['cal'] : [])]
   return [...opts, ...base.map((id) => ({ id, ...ACTIONS[id] }))]
 }
 
@@ -46,7 +46,7 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
       status TEXT DEFAULT 'open', UNIQUE (owner, chat));
     CREATE TABLE IF NOT EXISTS sends (owner INTEGER, op TEXT, result TEXT, PRIMARY KEY (owner, op));
   `)
-  for (const col of ["state TEXT DEFAULT 'agreed'", 'activity TEXT', 'options TEXT', 'late_by INTEGER DEFAULT 0', 'cal_event TEXT', 'clash TEXT']) {
+  for (const col of ["state TEXT DEFAULT 'agreed'", 'activity TEXT', 'options TEXT', 'late_by INTEGER DEFAULT 0', 'cal_event TEXT', 'clash TEXT', 'going INTEGER DEFAULT 0']) {
     try { db.exec(`ALTER TABLE plans ADD COLUMN ${col}`) } catch { /* already there */ }
   }
   const q = (sql) => db.prepare(sql)
@@ -224,7 +224,7 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
 
   const ownerFor = (token) => token ? q('SELECT * FROM owners WHERE token = ?').get(hash(token)) : undefined
 
-  const PLAN = `SELECT p.id, p.at, p.place, p.chat, p.state, p.activity, p.options, p.cal_event, p.clash, c.name, c.username, c.last_in
+  const PLAN = `SELECT p.id, p.at, p.place, p.chat, p.state, p.activity, p.options, p.cal_event, p.clash, p.going, c.name, c.username, c.last_in
     FROM plans p JOIN chats c ON c.owner = p.owner AND c.chat = p.chat`
 
   function next(owner) {
@@ -232,7 +232,7 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
       .get(owner.id, now() - GRACE)
     if (!p) return null
     return {
-      id: p.id, name: p.name, at: p.at, place: p.place, activity: p.activity, state: p.state,
+      id: p.id, name: p.name, at: p.at, place: p.place, activity: p.activity, state: p.state, going: !!p.going,
       clash: p.clash ? JSON.parse(p.clash) : null,
       actions: actionsFor(p, !!cal?.connected(owner.id)).map(({ id, label }) => ({ id, label })),
     }
@@ -282,6 +282,8 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
       q('UPDATE plans SET at = at + 600000, late_by = late_by + 600000 WHERE id = ?').run(id)
       await recheck(owner.id, p.chat)
     }
+    // Once on the way, the card stops offering it and waits for "10 min late" or "I'm here".
+    if (actionId === 'onway') q('UPDATE plans SET going = 1 WHERE id = ?').run(id)
     if (actionId === 'here' || actionId === 'cant') q("UPDATE plans SET status = 'done' WHERE id = ?").run(id)
     return finish({ status: 'sent', text })
   }

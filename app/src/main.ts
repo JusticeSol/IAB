@@ -10,6 +10,7 @@ type Plan = {
   id: number; name: string; at: number; place: string | null
   activity: string | null; state: 'proposed' | 'agreed'; actions: Action[]
   clash: { summary: string; start: number } | null
+  going?: boolean
 }
 type Result = { status: string; text?: string; username?: string | null }
 
@@ -96,7 +97,7 @@ function card(p: Plan) {
   const hhmm = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
   const what = p.activity ? ` · ${p.activity}` : ''
   // A proposal is a question waiting on me; an agreed plan is a fact.
-  const head = p.state === 'proposed' ? `${p.name.toUpperCase()} asks${what || ' to meet'}?` : `${p.name.toUpperCase()}${what}`
+  const head = p.state === 'proposed' ? `${p.name.toUpperCase()} asks${what || ' to meet'}?` : `${p.name.toUpperCase()}${what}${p.going ? ' · On the way' : ''}`
   // Three lines at most, so four replies fit below without scrolling.
   const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n).trimEnd() + '.' : t)
   const where = p.place ? `  ·  ${clip(p.place, 20)}` : ''

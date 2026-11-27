@@ -47,6 +47,8 @@ test('a plan needs agreement, then one tap sends once', async () => {
   assert.equal(a.status, 'sent')
   assert.notEqual(b.status, 'handoff')
   assert.equal(sent.filter((s) => s.business_connection_id).length, 1)
+  assert.equal(o.next(me()).going, true)
+  assert.deepEqual(o.next(me()).actions.map((x) => x.id), ['late', 'here'], 'on the way: no second "On my way"')
   assert.equal((await o.act(me(), p.id, 'late', 'y')).status, 'sent')
   assert.equal(o.next(me()).at - p.at, 600_000)
   await o.act(me(), p.id, 'here', 'z')
