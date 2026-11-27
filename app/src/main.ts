@@ -13,6 +13,19 @@ type Plan = {
 }
 type Result = { status: string; text?: string; username?: string | null }
 
+// Layout preview in development only: set to 'agreed' or 'proposal' to draw a sample card without the server.
+const PREVIEW: '' | 'agreed' | 'proposal' = ''
+const sample = (): Plan | null => {
+  if (!import.meta.env.DEV || !PREVIEW) return null
+  const at = Date.now() + 2 * 3600_000 + 15 * 60_000
+  return PREVIEW === 'agreed'
+    ? { id: 1, name: 'Jerpi', at, place: 'Cafe One, Lekki Phase 1', activity: 'Leg day', state: 'agreed',
+        clash: { summary: 'Weekly team standup', start: at + 30 * 60_000 },
+        actions: [{ id: 'onway', label: 'On my way' }, { id: 'late', label: '10 min late' }, { id: 'here', label: "I'm here" }, { id: 'cal', label: 'Add to calendar' }] }
+    : { id: 2, name: 'Tunde', at, place: null, activity: 'Leg day', state: 'proposed', clash: null,
+        actions: [{ id: 'opt0', label: 'Outside lobby' }, { id: 'opt1', label: 'Indoor arena' }, { id: 'cant', label: "Can't make it" }] }
+}
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
 const bridge = await waitForEvenAppBridge()
 
@@ -60,20 +73,21 @@ async function draw(text: string, withActions: boolean) {
     containerTotalNum: withActions ? 2 : 1,
     textObject: [new TextContainerProperty({
       containerID: 1, containerName: 'card', content: text,
-      xPosition: 16, yPosition: 12, width: 544, height: withActions ? 124 : 264,
+      xPosition: 16, yPosition: 8, width: 544, height: withActions ? 90 : 264,
       isEventCapture: withActions ? 0 : 1,
     })],
     listObject: withActions ? [new ListContainerProperty({
       containerID: 2, containerName: 'actions', isEventCapture: 1,
-      xPosition: 16, yPosition: 144, width: 544, height: 136,
+      xPosition: 16, yPosition: 100, width: 544, height: 184,
       itemContainer: new ListItemContainerProperty({ itemCount: plan?.actions.length ?? 0, itemWidth: 0, isItemSelectBorderEn: 1, itemName: plan?.actions.map((a) => a.label) ?? [] }),
     })] : [],
   }
-  if (started) await bridge.rebuildPageContainer(new RebuildPageContainer(page))
-  else {
+  if (!started) {
     started = true
+    // After a reload the host may still hold the old page and ignore this call, so a rebuild always follows.
     await bridge.createStartUpPageContainer(new CreateStartUpPageContainer(page))
   }
+  await bridge.rebuildPageContainer(new RebuildPageContainer(page))
 }
 
 function card(p: Plan) {
@@ -83,8 +97,11 @@ function card(p: Plan) {
   const what = p.activity ? ` · ${p.activity}` : ''
   // A proposal is a question waiting on me; an agreed plan is a fact.
   const head = p.state === 'proposed' ? `${p.name.toUpperCase()} asks${what || ' to meet'}?` : `${p.name.toUpperCase()}${what}`
-  const clash = p.clash ? `\n! Clash: ${p.clash.summary.slice(0, 18)} ${hhmm(p.clash.start)}` : ''
-  return `${head}\n${hhmm(p.at)}  ${eta}${p.place ? `\n${p.place}` : ''}${clash}`
+  // Three lines at most, so four replies fit below without scrolling.
+  const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n).trimEnd() + '.' : t)
+  const where = p.place ? `  ·  ${clip(p.place, 20)}` : ''
+  const clash = p.clash ? `\n! Clash: ${clip(p.clash.summary, 20)} ${hhmm(p.clash.start)}` : ''
+  return `${clip(head, 34)}\n${hhmm(p.at)}  ${eta}${where}${clash}`
 }
 
 async function unpair() {
@@ -96,6 +113,11 @@ async function unpair() {
 
 async function refresh() {
   if (busy) return
+  const demo = sample()
+  if (demo) {
+    plan = demo
+    return draw(card(plan), true)
+  }
   if (!token) return unpair()
   try {
     const { plan: latest } = await api<{ plan: Plan | null }>('/next')
@@ -121,7 +143,9 @@ async function act(index: number) {
   $('handoff').hidden = true
   try {
     await draw(action.id === 'cal' ? 'Adding to calendar…' : `Sending to ${target.name}…`, false)
-    const r = await api<Result>(`/plans/${target.id}/act`, { action: action.id, op: pending.op })
+    const r = sample()
+      ? { status: action.id === 'cal' ? 'added' : 'sent', text: action.label }
+      : await api<Result>(`/plans/${target.id}/act`, { action: action.id, op: pending.op })
     pending = null
     if (r.status === 'sent') await draw(`Sent to ${target.name}\n"${r.text}"`, false)
     else if (r.status === 'added') await draw('Added to Google Calendar', false)
