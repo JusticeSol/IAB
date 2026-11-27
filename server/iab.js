@@ -155,7 +155,8 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     const agreed = plan.status === 'agreed' || open?.state === 'agreed'
     const shown = upsertPlan(owner.id, chatId, {
       at,
-      place: clip(plan.place, 24) ?? open?.place ?? null,
+      // "Outside lobby or indoor arena?" is the question, not a place: the answer becomes the place.
+      place: (/\bor\b|\?/i.test(plan.place ?? '') ? null : clip(plan.place, 24)) ?? open?.place ?? null,
       activity: clip(plan.activity, 20),
       state: agreed ? 'agreed' : 'proposed',
       // Options are the friend's open question. Once the plan is agreed it has been answered,
@@ -284,6 +285,8 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     }
     if (actionId.startsWith('opt') || actionId === 'in') {
       q("UPDATE plans SET state = 'agreed', options = NULL WHERE id = ?").run(id)
+      // The chosen answer is where to meet, unless the chat already named a place.
+      if (actionId.startsWith('opt') && !p.place) q('UPDATE plans SET place = ? WHERE id = ?').run(text, id)
     }
     if (actionId === 'late') {
       q('UPDATE plans SET at = at + 600000, late_by = late_by + 600000 WHERE id = ?').run(id)

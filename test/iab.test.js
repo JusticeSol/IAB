@@ -135,6 +135,18 @@ test('after answering, a re-read that still sees the question does not bring the
   assert.deepEqual(o.next(me()).actions.map((a) => a.id), ['onway', 'late', 'here'])
 })
 
+test('the question is never shown as the place; the chosen answer becomes the place', async () => {
+  const asked = { ...legDay('proposed', { place: 'Outside lobby or indoor arena' }), options: ['Outside lobby', 'Indoor arena'] }
+  const { o, msg, me } = await setupReader([asked, { ...asked, plan: { ...asked.plan, status: 'agreed' } }])
+  await msg(2, 'leg day by 9pm, outside lobby or indoor arena?')
+  const p = o.next(me())
+  assert.equal(p.place, null)
+  await o.act(me(), p.id, 'opt1', 'a')
+  assert.equal(o.next(me()).place, 'Indoor arena')
+  await msg(2, 'okay')
+  assert.equal(o.next(me()).place, 'Indoor arena', 'a re-read keeps the answer')
+})
+
 test('my own proposal shows nothing until they accept; cancel clears it', async () => {
   const { o, msg, me } = await setupReader([
     legDay('proposed', { proposed_by: 'me' }),
