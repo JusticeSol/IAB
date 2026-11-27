@@ -152,12 +152,15 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     if (plan.status === 'proposed' && plan.proposed_by === 'me' && open?.state !== 'agreed') return outcome('waiting for their answer')
     const clip = (s, n) => (s ? String(s).trim().slice(0, n) || null : null)
     const opts = (options ?? []).map((o) => clip(o, 20)).filter(Boolean).slice(0, 2)
+    const agreed = plan.status === 'agreed' || open?.state === 'agreed'
     const shown = upsertPlan(owner.id, chatId, {
       at,
       place: clip(plan.place, 24) ?? open?.place ?? null,
       activity: clip(plan.activity, 20),
-      state: plan.status === 'agreed' || open?.state === 'agreed' ? 'agreed' : 'proposed',
-      options: opts.length ? JSON.stringify(opts) : null,
+      state: agreed ? 'agreed' : 'proposed',
+      // Options are the friend's open question. Once the plan is agreed it has been answered,
+      // so a re-read that still sees the question never puts the choices back.
+      options: open?.state !== 'agreed' && opts.length ? JSON.stringify(opts) : null,
     })
     outcome(shown ? 'card' : 'already arrived; ignored')
   }

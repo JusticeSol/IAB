@@ -125,6 +125,16 @@ test('their proposal with a question becomes a card with those answers', async (
   assert.deepEqual(after.actions.map((a) => a.id), ['onway', 'late', 'here'])
 })
 
+test('after answering, a re-read that still sees the question does not bring the choices back', async () => {
+  const question = { ...legDay('proposed'), options: ['Outside lobby', 'Indoor arena'] }
+  const { o, msg, me } = await setupReader([question, question])
+  await msg(2, 'leg day by 5. outside lobby or indoor arena?')
+  const p = o.next(me())
+  await o.act(me(), p.id, 'opt1', 'a')
+  await msg(1, 'Indoor arena') // Telegram's copy of what we sent, read again
+  assert.deepEqual(o.next(me()).actions.map((a) => a.id), ['onway', 'late', 'here'])
+})
+
 test('my own proposal shows nothing until they accept; cancel clears it', async () => {
   const { o, msg, me } = await setupReader([
     legDay('proposed', { proposed_by: 'me' }),
