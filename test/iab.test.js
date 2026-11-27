@@ -167,7 +167,7 @@ test('calendar: a clash shows on the card and one tap adds the plan once', async
   const cal = {
     connected: () => true,
     linkFor: () => 'https://iab.example/google/start?s=x',
-    clash: async (_o, from, to) => ({ clash: busy && busy.start < to && busy.start >= from ? busy : null, mine: null }),
+    clash: async (_o, from, to) => ({ clash: busy && busy.start < to && busy.start >= from ? busy : null, mine: added.length ? 'ev1' : null }),
     add: async (_o, ev) => { added.push(ev); return 'ev1' },
   }
   const read = async () => legDay('agreed')
@@ -195,6 +195,11 @@ test('calendar: a clash shows on the card and one tap adds the plan once', async
   busy = null
   await o.act(me(), p.id, 'late', 'l')
   assert.equal(o.next(me()).clash, null, 'moving the plan re-checks the calendar')
+  assert.equal(o.next(me()).actions.some((x) => x.id === 'cal'), false, 'still on the calendar')
+
+  added.length = 0 // the user deleted the event in Google Calendar
+  await o.act(me(), p.id, 'late', 'l2')
+  assert.equal(o.next(me()).actions.some((x) => x.id === 'cal'), true, 'deleted event: offer Add again')
 })
 
 test("calendar: the plan's own event is not a clash and is not added again", async () => {

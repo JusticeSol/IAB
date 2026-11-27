@@ -117,7 +117,7 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     if (!p || !cal?.connected(ownerId)) return
     try {
       const { clash, mine } = await cal.clash(ownerId, p.at, p.at + MEET_LENGTH, { id: p.cal_event, title: titleFor(p) })
-      q('UPDATE plans SET clash = ?, cal_event = coalesce(cal_event, ?) WHERE id = ?').run(clash ? JSON.stringify(clash) : null, mine, p.id)
+      q('UPDATE plans SET clash = ?, cal_event = ? WHERE id = ?').run(clash ? JSON.stringify(clash) : null, mine, p.id)
     } catch (e) {
       log(`calendar check failed: ${e.message}`)
     }
