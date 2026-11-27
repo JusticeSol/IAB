@@ -49,7 +49,7 @@ createServer(async (req, res) => {
   try {
     if (req.method === 'OPTIONS') return reply(204)
     const { pathname } = new URL(req.url, 'http://x')
-    if (pathname === '/health') return reply(200, { ok: true })
+    if (pathname === '/health') return reply(200, { ok: true, commit: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? null })
     if (cal && req.method === 'GET' && pathname === '/google/start') {
       const to = cal.startUrl(new URL(req.url, 'http://x').searchParams.get('s') ?? '')
       if (!to) return page(res, 410, 'This link has expired. Send /calendar to the bot for a new one.')
