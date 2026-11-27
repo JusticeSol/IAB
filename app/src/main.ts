@@ -173,8 +173,8 @@ bridge.onEvenHubEvent((event) => {
   const e = event.listEvent ?? event.textEvent ?? event.sysEvent
   // Zero values are dropped in transit: a missing type is a click, a missing index is the first row.
   const type = e?.eventType ?? (event.listEvent || event.textEvent || (event.sysEvent && !event.sysEvent.imuData) ? OsEventTypeList.CLICK_EVENT : undefined)
-  if (type === OsEventTypeList.DOUBLE_CLICK_EVENT) void bridge.shutDownPageContainer(1)
-  else if (type === OsEventTypeList.FOREGROUND_ENTER_EVENT) void refresh()
+  // A double tap refreshes and never sends, so a hurried tap cannot close IAB or reply by accident.
+  if (type === OsEventTypeList.DOUBLE_CLICK_EVENT || type === OsEventTypeList.FOREGROUND_ENTER_EVENT) void refresh()
   else if (type === OsEventTypeList.CLICK_EVENT) {
     if (event.listEvent) void act(event.listEvent.currentSelectItemIndex ?? 0)
     else if (!plan) void refresh()
