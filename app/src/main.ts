@@ -3,7 +3,8 @@ import {
   RebuildPageContainer, TextContainerProperty, TextContainerUpgrade, waitForEvenAppBridge,
 } from '@evenrealities/even_hub_sdk'
 
-const API: string = import.meta.env.VITE_API ?? 'http://127.0.0.1:8787'
+// The hosted server; set VITE_API=http://127.0.0.1:8787 to develop against a local one.
+const API: string = import.meta.env.VITE_API ?? 'https://iab-production-aba3d365.up.railway.app'
 type Action = { id: string; label: string }
 type Plan = {
   id: number; name: string; at: number; place: string | null
