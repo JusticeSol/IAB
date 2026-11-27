@@ -97,15 +97,22 @@ export function createCalendar({
       return link.owner
     },
 
-    /** The first timed event overlapping [from, to), other than skipId. Returns { summary, start } or null. */
-    async clash(owner, from, to, skipId) {
+    /**
+     * The first timed event overlapping [from, to) that is not this plan, as { summary, start }, plus the id of
+     * the event that is this plan (IAB's own id, or the same title at the same start) so it is not added twice.
+     */
+    async clash(owner, from, to, self = {}) {
       const data = await call(owner, `${API}?` + new URLSearchParams({
         timeMin: new Date(from).toISOString(), timeMax: new Date(to).toISOString(),
         singleEvents: 'true', orderBy: 'startTime', maxResults: '10',
       }))
-      const hit = (data.items ?? []).find((e) =>
-        e.id !== skipId && e.start?.dateTime && e.transparency !== 'transparent' && e.status !== 'cancelled')
-      return hit ? { summary: hit.summary || 'Busy', start: Date.parse(hit.start.dateTime) } : null
+      const timed = (data.items ?? []).filter((e) => e.start?.dateTime && e.status !== 'cancelled')
+      const isSelf = (e) => e.id === self.id || (e.summary === self.title && Date.parse(e.start.dateTime) === from)
+      const hit = timed.find((e) => !isSelf(e) && e.transparency !== 'transparent')
+      return {
+        clash: hit ? { summary: hit.summary || 'Busy', start: Date.parse(hit.start.dateTime) } : null,
+        mine: timed.find(isSelf)?.id ?? null,
+      }
     },
 
     /** Creates the event and returns its id. */

@@ -165,7 +165,7 @@ test('calendar: a clash shows on the card and one tap adds the plan once', async
   const cal = {
     connected: () => true,
     linkFor: () => 'https://iab.example/google/start?s=x',
-    clash: async (_o, from, to, skip) => (busy && busy.start < to && busy.start >= from && skip !== 'ev1' ? busy : null),
+    clash: async (_o, from, to) => ({ clash: busy && busy.start < to && busy.start >= from ? busy : null, mine: null }),
     add: async (_o, ev) => { added.push(ev); return 'ev1' },
   }
   const read = async () => legDay('agreed')
@@ -193,6 +193,28 @@ test('calendar: a clash shows on the card and one tap adds the plan once', async
   busy = null
   await o.act(me(), p.id, 'late', 'l')
   assert.equal(o.next(me()).clash, null, 'moving the plan re-checks the calendar')
+})
+
+test("calendar: the plan's own event is not a clash and is not added again", async () => {
+  const sent = []
+  const tg = async (_, b) => { sent.push(b) }
+  let self
+  const cal = {
+    connected: () => true,
+    linkFor: () => 'x',
+    clash: async (_o, _from, _to, s) => { self = s; return { clash: null, mine: 'old-ev' } },
+    add: async () => { throw new Error('should not add') },
+  }
+  const o = createIab({ tg, now: () => T0, read: async () => legDay('agreed'), cal })
+  await o.onUpdate({ business_connection: { id: 'c', user: { id: 1 }, user_chat_id: 1, is_enabled: true, rights: { can_reply: true } } })
+  const token = o.pair(sent[0].text.match(/\d{8}/)[0], 'Asia/Dubai')
+  await o.onUpdate({ business_message: {
+    business_connection_id: 'c', date: T0 / 1000, from: { id: 2 },
+    chat: { id: 2, type: 'private', first_name: 'Tunde' }, text: 'leg day 5pm?' } })
+  assert.equal(self.title, 'Leg day with Tunde')
+  const p = o.next(o.ownerFor(token))
+  assert.equal(p.clash, null)
+  assert.equal(p.actions.some((a) => a.id === 'cal'), false, 'already on the calendar')
 })
 
 test('pairing codes are single use and unknown tokens are rejected', async () => {

@@ -9,6 +9,8 @@ const CODE_TTL = 10 * 60_000
 const KEEP_LINES = 12
 const KEEP_FOR = 12 * 3600_000
 const MEET_LENGTH = 3600_000
+/** The calendar title IAB uses, and recognises as this plan rather than a clash. */
+const titleFor = (p) => `${p.activity ?? 'Meet'} with ${p.name}`
 const hash = (s) => createHash('sha256').update(s).digest('hex')
 
 export const ACTIONS = {
@@ -111,11 +113,11 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
 
   /** Looks for a calendar clash with the chat's open plan. Calendar trouble never blocks the card. */
   async function recheck(ownerId, chatId) {
-    const p = q("SELECT * FROM plans WHERE owner = ? AND chat = ? AND status = 'open'").get(ownerId, chatId)
+    const p = q(`${PLAN} WHERE p.owner = ? AND p.chat = ? AND p.status = 'open'`).get(ownerId, chatId)
     if (!p || !cal?.connected(ownerId)) return
     try {
-      const hit = await cal.clash(ownerId, p.at, p.at + MEET_LENGTH, p.cal_event)
-      q('UPDATE plans SET clash = ? WHERE id = ?').run(hit ? JSON.stringify(hit) : null, p.id)
+      const { clash, mine } = await cal.clash(ownerId, p.at, p.at + MEET_LENGTH, { id: p.cal_event, title: titleFor(p) })
+      q('UPDATE plans SET clash = ?, cal_event = coalesce(cal_event, ?) WHERE id = ?').run(clash ? JSON.stringify(clash) : null, mine, p.id)
     } catch (e) {
       log(`calendar check failed: ${e.message}`)
     }
@@ -251,7 +253,7 @@ export function createIab({ db: path = ':memory:', tg, tz = 'UTC', now = Date.no
     if (actionId === 'cal') {
       try {
         const eventId = await cal.add(owner.id, {
-          summary: `${p.activity ?? 'Meet'} with ${p.name}`, location: p.place, from: p.at, to: p.at + MEET_LENGTH,
+          summary: titleFor(p), location: p.place, from: p.at, to: p.at + MEET_LENGTH,
         })
         q('UPDATE plans SET cal_event = ? WHERE id = ?').run(eventId, id)
         return finish({ status: 'added', text })
