@@ -1,0 +1,21 @@
+{
+  "package_id": "com.justicesol.iab",
+  "edition": "202601",
+  "name": "IAB",
+  "version": "1.0.0",
+  "min_app_version": "2.2.10",
+  "min_sdk_version": "0.0.16",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "IAB talks to its own server to show the meetup agreed in Telegram and to send your one-tap reply.",
+      "whitelist": [
+        "https://iab-production-aba3d365.up.railway.app"
+      ]
+    }
+  ],
+  "supported_languages": [
+    "en"
+  ]
+}

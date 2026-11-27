@@ -9,9 +9,10 @@
     "start": "node server/index.js",
     "server": "node --env-file-if-exists=.env server/index.js",
     "dev": "vite app --port 5173 --host 127.0.0.1",
-    "build": "tsc --noEmit -p app && vite build app",
+    "build": "tsc --noEmit -p app && vite build app --base ./",
     "sim": "evenhub-simulator http://127.0.0.1:5173 --automation-port 9898",
-    "test": "node --test"
+    "test": "node --test",
+    "pack": "npm run build && evenhub pack app.json app/dist -o iab.ehpk"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.14.0",
